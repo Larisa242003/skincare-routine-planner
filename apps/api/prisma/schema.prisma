@@ -1,0 +1,212 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model conflict_rules {
+  id                                                             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  group_a_id                                                     String            @db.Uuid
+  group_b_id                                                     String            @db.Uuid
+  severity                                                       conflict_severity
+  scope                                                          conflict_scope    @default(same_routine)
+  explanation                                                    String
+  source_ref                                                     String?
+  ingredient_groups_conflict_rules_group_a_idToingredient_groups ingredient_groups @relation("conflict_rules_group_a_idToingredient_groups", fields: [group_a_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  ingredient_groups_conflict_rules_group_b_idToingredient_groups ingredient_groups @relation("conflict_rules_group_b_idToingredient_groups", fields: [group_b_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model diary_entries {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String   @db.Uuid
+  entry_date DateTime @default(dbgenerated("CURRENT_DATE")) @db.Date
+  photo_key  String?
+  tags       String[] @default([])
+  notes      String?
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  users      users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id, entry_date(sort: Desc)], map: "diary_entries_user_date_idx")
+}
+
+model ingredient_group_members {
+  ingredient_id     String            @db.Uuid
+  group_id          String            @db.Uuid
+  ingredient_groups ingredient_groups @relation(fields: [group_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  ingredients       ingredients       @relation(fields: [ingredient_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([ingredient_id, group_id])
+  @@index([group_id], map: "ingredient_group_members_group_idx")
+}
+
+model ingredient_groups {
+  id                                                          String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                                                        String                     @unique
+  description                                                 String?
+  conflict_rules_conflict_rules_group_a_idToingredient_groups conflict_rules[]           @relation("conflict_rules_group_a_idToingredient_groups")
+  conflict_rules_conflict_rules_group_b_idToingredient_groups conflict_rules[]           @relation("conflict_rules_group_b_idToingredient_groups")
+  ingredient_group_members                                    ingredient_group_members[]
+}
+
+model ingredients {
+  id                       String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  inci_name                String                     @unique
+  common_name              String?
+  function                 String?
+  description              String?
+  ingredient_group_members ingredient_group_members[]
+  product_ingredients      product_ingredients[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model product_ingredients {
+  product_id    String      @db.Uuid
+  ingredient_id String      @db.Uuid
+  position      Int
+  ingredients   ingredients @relation(fields: [ingredient_id], references: [id], onUpdate: NoAction)
+  products      products    @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([product_id, ingredient_id])
+  @@unique([product_id, position])
+  @@index([ingredient_id], map: "product_ingredients_ingredient_idx")
+}
+
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model products {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                String
+  brand               String?
+  category            product_category      @default(other)
+  barcode             String?               @unique
+  created_by          String?               @db.Uuid
+  is_verified         Boolean               @default(false)
+  created_at          DateTime              @default(now()) @db.Timestamptz(6)
+  product_ingredients product_ingredients[]
+  users               users?                @relation(fields: [created_by], references: [id], onUpdate: NoAction)
+  user_products       user_products[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model push_tokens {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String   @db.Uuid
+  token      String   @unique
+  platform   String
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  users      users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id], map: "push_tokens_user_idx")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
+model routine_steps {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  routine_id      String        @db.Uuid
+  user_product_id String        @db.Uuid
+  position        Int
+  days            Int[]         @default([0, 1, 2, 3, 4, 5, 6]) @db.SmallInt
+  wait_minutes    Int           @default(0)
+  routines        routines      @relation(fields: [routine_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user_products   user_products @relation(fields: [user_product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  step_logs       step_logs[]
+
+  @@unique([routine_id, position])
+  @@index([user_product_id], map: "routine_steps_user_product_idx")
+}
+
+model routines {
+  id            String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id       String          @db.Uuid
+  period        routine_period
+  name          String          @default("My routine")
+  created_at    DateTime        @default(now()) @db.Timestamptz(6)
+  routine_steps routine_steps[]
+  users         users           @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id], map: "routines_user_idx")
+}
+
+model step_logs {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  step_id       String        @db.Uuid
+  done_on       DateTime      @default(dbgenerated("CURRENT_DATE")) @db.Date
+  routine_steps routine_steps @relation(fields: [step_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([step_id, done_on])
+}
+
+model user_products {
+  id            String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id       String          @db.Uuid
+  product_id    String          @db.Uuid
+  opened_on     DateTime?       @db.Date
+  added_at      DateTime        @default(now()) @db.Timestamptz(6)
+  routine_steps routine_steps[]
+  products      products        @relation(fields: [product_id], references: [id], onUpdate: NoAction)
+  users         users           @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, product_id])
+}
+
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model users {
+  id            String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email         String
+  password_hash String
+  role          user_role       @default(user)
+  skin_type     skin_type?
+  concerns      String[]        @default([])
+  morning_at    DateTime        @default(dbgenerated("'08:00:00'::time without time zone")) @db.Time(6)
+  evening_at    DateTime        @default(dbgenerated("'21:00:00'::time without time zone")) @db.Time(6)
+  created_at    DateTime        @default(now()) @db.Timestamptz(6)
+  diary_entries diary_entries[]
+  products      products[]
+  push_tokens   push_tokens[]
+  routines      routines[]
+  user_products user_products[]
+}
+
+enum conflict_scope {
+  same_routine
+  same_day
+}
+
+enum conflict_severity {
+  avoid
+  caution
+  note
+}
+
+enum product_category {
+  cleanser
+  toner
+  serum
+  treatment
+  moisturizer
+  sunscreen
+  mask
+  other
+}
+
+enum routine_period {
+  morning
+  evening
+}
+
+enum skin_type {
+  dry
+  oily
+  combination
+  normal
+  sensitive
+}
+
+enum user_role {
+  user
+  admin
+}
