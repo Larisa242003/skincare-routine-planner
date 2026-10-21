@@ -1,10 +1,4 @@
-import express from 'express';
+import { app } from './app.js';
+import { env } from './config/env.js';
 
-const app = express();
-app.use(express.json());
-
-app.get('/health', (_req, res) => {
-  res.json({ ok: true });
-});
-
-app.listen(3000, () => console.log('API on http://localhost:3000'));
+app.listen(env.PORT, () => console.log(`API on http://localhost:${env.PORT}`));
